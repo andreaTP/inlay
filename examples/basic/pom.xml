@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.example</groupId>
+  <artifactId>inlay-basic-example</artifactId>
+  <version>1.0-SNAPSHOT</version>
+
+  <!--
+    Basic example: fetch a wasm from an OCI registry and compile with Endive.
+
+    Before running, push a wasm artifact:
+      oras push ghcr.io/YOUR_ORG/my-module:1.0.0 my-module.wasm:application/wasm
+
+    Then update <imageRef> below and run:
+      mvn compile
+  -->
+
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <inlay.version>999-SNAPSHOT</inlay.version>
+    <endive.version>1.0.0</endive.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>run.endive</groupId>
+      <artifactId>runtime</artifactId>
+      <version>${endive.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- 1. Fetch wasm from OCI registry -->
+      <plugin>
+        <groupId>io.roastedroot</groupId>
+        <artifactId>inlay-maven-plugin</artifactId>
+        <version>${inlay.version}</version>
+        <executions>
+          <execution>
+            <id>fetch</id>
+            <goals>
+              <goal>fetch</goal>
+            </goals>
+            <configuration>
+              <modules>
+                <module>
+                  <!-- Replace with your OCI reference -->
+                  <imageRef>ghcr.io/YOUR_ORG/my-module:1.0.0</imageRef>
+                  <outputFile>${project.build.directory}/wasm/my-module.wasm</outputFile>
+                </module>
+              </modules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- 2. AOT compile wasm to JVM bytecode -->
+      <plugin>
+        <groupId>run.endive</groupId>
+        <artifactId>endive-compiler-maven-plugin</artifactId>
+        <version>${endive.version}</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <configuration>
+              <wasmFile>${project.build.directory}/wasm/my-module.wasm</wasmFile>
+              <name>com.example.MyModule</name>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

@@ -1,0 +1,60 @@
+name: Publish Wasm to OCI
+
+on:
+  workflow_call:
+    inputs:
+      wasm-file:
+        description: 'Path to the .wasm file to publish'
+        required: true
+        type: string
+      image-ref:
+        description: 'OCI image reference (e.g. ghcr.io/roastedroot/sqlite4j-wasm)'
+        required: true
+        type: string
+      version:
+        description: 'Version tag (e.g. 3.51.0)'
+        required: true
+        type: string
+      sign:
+        description: 'Sign with cosign (keyless via OIDC)'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Install cosign
+        if: inputs.sign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push wasm artifact
+        run: |
+          oras push \
+            "${{ inputs.image-ref }}:${{ inputs.version }}" \
+            "${{ inputs.wasm-file }}:application/wasm"
+
+          oras push \
+            "${{ inputs.image-ref }}:latest" \
+            "${{ inputs.wasm-file }}:application/wasm"
+
+      - name: Sign with cosign
+        if: inputs.sign
+        run: |
+          cosign sign --yes "${{ inputs.image-ref }}:${{ inputs.version }}"
+          cosign sign --yes "${{ inputs.image-ref }}:latest"

@@ -1,0 +1,20 @@
+[package]
+name = "inlay-wkg-wasm"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-pkg-common = { version = "0.15", default-features = false }
+semver = { version = "1", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"
