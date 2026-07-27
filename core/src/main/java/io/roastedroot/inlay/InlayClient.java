@@ -16,8 +16,12 @@ import land.oras.Referrers;
 import land.oras.Registry;
 import land.oras.policy.ContainersPolicy;
 import land.oras.utils.Const;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class InlayClient {
+
+    private static final Logger LOG = LoggerFactory.getLogger(InlayClient.class);
 
     private final Registry registry;
     private final Path cacheDir;
@@ -93,6 +97,12 @@ public final class InlayClient {
     public Path fetchSigstoreBundle(String imageRef, String digest, Path bundlePath) {
         if (imageRef == null || imageRef.isEmpty()) {
             throw new InlayException("imageRef must not be null or empty");
+        }
+        if (digest == null || digest.isEmpty()) {
+            throw new InlayException("digest must not be null or empty");
+        }
+        if (bundlePath == null) {
+            throw new InlayException("bundlePath must not be null");
         }
         try {
             ContainerRef containerRef = ContainerRef.parse(imageRef);
@@ -170,11 +180,11 @@ public final class InlayClient {
                                 try {
                                     Files.deleteIfExists(p);
                                 } catch (IOException e) {
-                                    // best-effort cleanup
+                                    LOG.debug("Failed to delete: {}", p, e);
                                 }
                             });
         } catch (IOException e) {
-            // best-effort cleanup
+            LOG.debug("Failed to walk directory for cleanup: {}", dir, e);
         }
     }
 
@@ -224,7 +234,8 @@ public final class InlayClient {
             Registry.Builder rb = Registry.builder();
             if (insecure) {
                 rb.insecure();
-            } else if (username != null) {
+            }
+            if (username != null) {
                 rb.defaults(username, password);
             } else {
                 rb.defaults();

@@ -20,6 +20,16 @@ on:
         required: false
         type: boolean
         default: true
+      oras-version:
+        description: 'ORAS CLI version'
+        required: false
+        type: string
+        default: '1.2.2'
+      cosign-version:
+        description: 'Cosign version'
+        required: false
+        type: string
+        default: 'v2.4.1'
 
 permissions:
   contents: read
@@ -35,10 +45,14 @@ jobs:
 
       - name: Install ORAS
         uses: oras-project/setup-oras@v1
+        with:
+          version: ${{ inputs.oras-version }}
 
       - name: Install cosign
         if: inputs.sign
         uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: ${{ inputs.cosign-version }}
 
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin

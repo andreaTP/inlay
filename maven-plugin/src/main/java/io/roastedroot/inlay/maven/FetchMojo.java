@@ -9,11 +9,13 @@ import io.roastedroot.inlay.InlayClient;
 import io.roastedroot.inlay.InlayException;
 import io.roastedroot.inlay.LockFile;
 import io.roastedroot.inlay.LockedPackage;
+import io.roastedroot.inlay.WkgParser;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -42,6 +44,9 @@ public class FetchMojo extends AbstractMojo {
     @Parameter(defaultValue = "false", property = "inlay.noCache")
     private boolean noCache;
 
+    @Parameter(defaultValue = "false", property = "inlay.insecure")
+    private boolean insecure;
+
     @Parameter(property = "inlay.configFile")
     private File configFile;
 
@@ -53,35 +58,38 @@ public class FetchMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException {
-        LockFile lock;
-        try {
-            lock = LockFile.read(lockFile.toPath());
-        } catch (IOException e) {
-            throw new MojoExecutionException("Failed to read lock file: " + lockFile, e);
-        }
-
-        boolean lockChanged = false;
-
-        for (ModuleConfig module : modules) {
-            boolean changed = fetchModule(module, lock);
-            lockChanged = lockChanged || changed;
-        }
-
-        if (lockChanged) {
+        try (WkgParser parser = new WkgParser()) {
+            LockFile lock;
             try {
-                lock.write(lockFile.toPath());
-                getLog().info("Updated lock file: " + lockFile);
+                lock = LockFile.read(parser, lockFile.toPath());
             } catch (IOException e) {
-                throw new MojoExecutionException("Failed to write lock file: " + lockFile, e);
+                throw new MojoExecutionException("Failed to read lock file: " + lockFile, e);
+            }
+
+            boolean lockChanged = false;
+
+            for (ModuleConfig module : modules) {
+                boolean changed = fetchModule(module, lock, parser);
+                lockChanged = lockChanged || changed;
+            }
+
+            if (lockChanged) {
+                try {
+                    lock.write(lockFile.toPath());
+                    getLog().info("Updated lock file: " + lockFile);
+                } catch (IOException e) {
+                    throw new MojoExecutionException("Failed to write lock file: " + lockFile, e);
+                }
             }
         }
     }
 
-    private boolean fetchModule(ModuleConfig module, LockFile lock) throws MojoExecutionException {
+    private boolean fetchModule(ModuleConfig module, LockFile lock, WkgParser parser)
+            throws MojoExecutionException {
         String imageRef = module.getImageRef();
 
         if ((imageRef == null || imageRef.isEmpty()) && module.getPackageRef() != null) {
-            imageRef = resolvePackageRef(module.getPackageRef());
+            imageRef = resolvePackageRef(module.getPackageRef(), lock);
         }
 
         if (imageRef == null || imageRef.isEmpty()) {
@@ -126,16 +134,35 @@ public class FetchMojo extends AbstractMojo {
                                 + ". Run with -Dinlay.update to accept the new digest.");
             }
 
-            client.pullByDigest(imageRef, resolvedDigest, outputPath);
-            getLog().info("Fetched " + imageRef + " -> " + outputPath);
+            boolean needsVerification =
+                    module.getSigstoreIssuer() != null || module.getSigstoreIdentity() != null;
 
-            if (module.getSigstoreIssuer() != null || module.getSigstoreIdentity() != null) {
-                verifySigstore(client, imageRef, resolvedDigest, outputPath, module);
+            if (needsVerification) {
+                Path tempPath = null;
+                try {
+                    Files.createDirectories(outputPath.getParent());
+                    tempPath = Files.createTempFile(outputPath.getParent(), "inlay-", ".wasm.tmp");
+                    client.pullByDigest(imageRef, resolvedDigest, tempPath);
+                    verifySigstore(client, imageRef, resolvedDigest, tempPath, module);
+                    Files.move(tempPath, outputPath, StandardCopyOption.REPLACE_EXISTING);
+                    tempPath = null;
+                } finally {
+                    if (tempPath != null) {
+                        Files.deleteIfExists(tempPath);
+                    }
+                }
+            } else {
+                client.pullByDigest(imageRef, resolvedDigest, outputPath);
             }
+
+            getLog().info("Fetched " + imageRef + " -> " + outputPath);
 
             lock.addOrUpdate(imageRef, resolvedDigest);
             return true;
         } catch (InlayException e) {
+            throw new MojoExecutionException(
+                    "Failed to fetch " + imageRef + ": " + e.getMessage(), e);
+        } catch (IOException e) {
             throw new MojoExecutionException(
                     "Failed to fetch " + imageRef + ": " + e.getMessage(), e);
         }
@@ -188,7 +215,8 @@ public class FetchMojo extends AbstractMojo {
         }
     }
 
-    private String resolvePackageRef(String packageRef) throws MojoExecutionException {
+    private String resolvePackageRef(String packageRef, LockFile lock)
+            throws MojoExecutionException {
         String namespace = packageRef;
         String version = null;
         int atIndex = packageRef.indexOf('@');
@@ -207,7 +235,7 @@ public class FetchMojo extends AbstractMojo {
         String name = namespace.substring(colonIndex + 1);
 
         String configToml = loadConfigToml();
-        String registry = LockFile.resolveNamespace(configToml, ns);
+        String registry = lock.resolveNamespace(configToml, ns);
         if (registry == null) {
             throw new MojoExecutionException(
                     "No registry found for namespace '" + ns + "' in config.toml");
@@ -280,6 +308,9 @@ public class FetchMojo extends AbstractMojo {
         InlayClient.Builder builder = InlayClient.builder();
         if (noCache) {
             builder.noCache();
+        }
+        if (insecure) {
+            builder.insecure();
         }
 
         Server server = settings.getServer(registryHost);

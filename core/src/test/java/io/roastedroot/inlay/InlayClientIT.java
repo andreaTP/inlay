@@ -3,6 +3,7 @@ package io.roastedroot.inlay;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,6 +13,7 @@ import java.util.Objects;
 import land.oras.ContainerRef;
 import land.oras.LocalPath;
 import land.oras.Registry;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -34,10 +36,19 @@ class InlayClientIT {
                     .waitingFor(Wait.forHttp("/v2/").forStatusCode(200));
 
     private static String registryUrl;
+    private static WkgParser parser;
 
     @BeforeAll
     static void setup() {
         registryUrl = "localhost:" + ZOT.getMappedPort(5000);
+        parser = new WkgParser();
+    }
+
+    @AfterAll
+    static void tearDownParser() {
+        if (parser != null) {
+            parser.close();
+        }
     }
 
     @TempDir Path tempDir;
@@ -139,15 +150,28 @@ class InlayClientIT {
         InlayClient client = InlayClient.builder().insecure().noCache().build();
         String digest = client.getDigest(ref);
 
-        LockFile lock = new LockFile();
+        LockFile lock = new LockFile(parser);
         lock.addOrUpdate(ref, digest);
 
         Path lockPath = tempDir.resolve("wkg.lock");
         lock.write(lockPath);
 
-        LockFile loaded = LockFile.read(lockPath);
+        LockFile loaded = LockFile.read(parser, lockPath);
         LockedPackage pkg = loaded.findByImageRef(ref);
         assertNotNull(pkg);
         assertEquals(digest, pkg.getDigest());
+    }
+
+    @Test
+    void fetchSigstoreBundleReturnsNullWhenNoBundleExists() throws Exception {
+        byte[] content = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
+        String ref = pushTestWasm("no-sig", content);
+
+        InlayClient client = InlayClient.builder().insecure().noCache().build();
+        String digest = client.getDigest(ref);
+
+        Path bundlePath = tempDir.resolve("bundle.sigstore.json");
+        Path result = client.fetchSigstoreBundle(ref, digest, bundlePath);
+        assertNull(result);
     }
 }

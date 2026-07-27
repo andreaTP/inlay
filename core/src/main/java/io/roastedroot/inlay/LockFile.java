@@ -9,15 +9,16 @@ import java.util.List;
 
 public final class LockFile {
 
-    private static final WkgParser PARSER = new WkgParser();
-
+    private final WkgParser parser;
     private final List<LockedPackage> packages;
 
-    public LockFile() {
+    public LockFile(WkgParser parser) {
+        this.parser = parser;
         this.packages = new ArrayList<>();
     }
 
-    public LockFile(List<LockedPackage> packages) {
+    public LockFile(WkgParser parser, List<LockedPackage> packages) {
+        this.parser = parser;
         this.packages = new ArrayList<>(packages);
     }
 
@@ -50,28 +51,20 @@ public final class LockFile {
     }
 
     public void write(Path path) throws IOException {
-        String toml;
-        synchronized (PARSER) {
-            toml = PARSER.writeLock(packages);
-        }
+        String toml = parser.writeLock(packages);
         Files.writeString(path, toml);
     }
 
-    public static LockFile read(Path path) throws IOException {
-        if (!Files.exists(path)) {
-            return new LockFile();
-        }
-        String toml = Files.readString(path);
-        List<LockedPackage> packages;
-        synchronized (PARSER) {
-            packages = PARSER.readLock(toml);
-        }
-        return new LockFile(packages);
+    public String resolveNamespace(String configToml, String namespace) {
+        return parser.resolveNamespace(configToml, namespace);
     }
 
-    public static String resolveNamespace(String configToml, String namespace) {
-        synchronized (PARSER) {
-            return PARSER.resolveNamespace(configToml, namespace);
+    public static LockFile read(WkgParser parser, Path path) throws IOException {
+        if (!Files.exists(path)) {
+            return new LockFile(parser);
         }
+        String toml = Files.readString(path);
+        List<LockedPackage> packages = parser.readLock(toml);
+        return new LockFile(parser, packages);
     }
 }

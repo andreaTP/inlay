@@ -11,7 +11,7 @@ import run.endive.runtime.Instance;
 import run.endive.runtime.Memory;
 import run.endive.wasi.WasiPreview1;
 
-final class WkgParser implements AutoCloseable {
+public final class WkgParser implements AutoCloseable {
 
     private static final run.endive.wasm.WasmModule MODULE = WkgModule.load();
 
@@ -19,7 +19,7 @@ final class WkgParser implements AutoCloseable {
     private final WkgParser_ModuleExports exports;
     private final Memory memory;
 
-    WkgParser() {
+    public WkgParser() {
         this.wasi = WasiPreview1.builder().build();
         Instance instance =
                 Instance.builder(MODULE)
@@ -45,12 +45,17 @@ final class WkgParser implements AutoCloseable {
             byte[] data = memory.readBytes(resultPtr, resultLen);
             exports.dealloc(resultPtr, resultLen);
 
-            String asString = new String(data, StandardCharsets.UTF_8);
-            if (asString.startsWith("ERROR:")) {
-                throw new InlayException("Failed to parse lock file: " + asString.substring(6));
+            if (data.length == 0) {
+                return List.of();
             }
 
-            return decodeEntries(data);
+            byte tag = data[0];
+            if (tag == 0x01) {
+                String error = new String(data, 1, data.length - 1, StandardCharsets.UTF_8);
+                throw new InlayException("Failed to parse lock file: " + error);
+            }
+
+            return decodeEntries(data, 1);
         } finally {
             exports.dealloc(ptr, tomlBytes.length);
         }
@@ -112,8 +117,9 @@ final class WkgParser implements AutoCloseable {
         return new String(resultBytes, StandardCharsets.UTF_8);
     }
 
-    private static List<LockedPackage> decodeEntries(byte[] data) {
-        ByteBuffer buf = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+    private static List<LockedPackage> decodeEntries(byte[] data, int offset) {
+        ByteBuffer buf =
+                ByteBuffer.wrap(data, offset, data.length - offset).order(ByteOrder.LITTLE_ENDIAN);
         int count = buf.getInt();
         List<LockedPackage> result = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {

@@ -126,12 +126,15 @@ pub extern "C" fn read_lock(ptr: *const u8, len: usize) -> u64 {
     let data: LockFileData = match toml::from_str(input) {
         Ok(d) => d,
         Err(e) => {
-            let msg = format!("ERROR:{}", e);
-            return return_string(&msg);
+            let mut err_buf = vec![0x01u8];
+            err_buf.extend_from_slice(format!("{}", e).as_bytes());
+            return return_bytes(err_buf);
         }
     };
 
     let mut buf = Vec::new();
+    // Tag byte: 0x00 = success (binary data)
+    buf.push(0x00u8);
     let mut count: i32 = 0;
     // Reserve space for count
     buf.extend_from_slice(&0i32.to_le_bytes());
@@ -147,8 +150,8 @@ pub extern "C" fn read_lock(ptr: *const u8, len: usize) -> u64 {
         }
     }
 
-    // Patch count at the beginning
-    buf[0..4].copy_from_slice(&count.to_le_bytes());
+    // Patch count at offset 1 (after the tag byte)
+    buf[1..5].copy_from_slice(&count.to_le_bytes());
 
     return_bytes(buf)
 }
