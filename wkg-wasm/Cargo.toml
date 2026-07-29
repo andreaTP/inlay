@@ -7,7 +7,7 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-wasm-pkg-common = { version = "0.15", default-features = false }
+wasm-pkg-common = { version = "0.16", default-features = false }
 semver = { version = "1", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
