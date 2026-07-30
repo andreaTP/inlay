@@ -127,6 +127,8 @@ cosign sign --yes ghcr.io/roastedroot/sqlite4j-wasm:3.51.0
 
 ### GitHub Actions — publisher
 
+Use the reusable workflow included in this repo:
+
 ```yaml
 name: Publish Wasm
 on:
@@ -138,18 +140,18 @@ permissions:
   packages: write
   id-token: write
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oras-project/setup-oras@v1
-      - uses: sigstore/cosign-installer@v3
       - run: ./wasm-build/build.sh
-      - run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
-      - run: |
-          oras push ghcr.io/roastedroot/my-module-wasm:1.0.0 \
-            wasm-build/output/my-module.wasm:application/wasm
-          cosign sign --yes ghcr.io/roastedroot/my-module-wasm:1.0.0
+  publish:
+    needs: build
+    uses: roastedroot/inlay/.github/workflows/wasm-publish.yml@main
+    with:
+      wasm-file: wasm-build/output/my-module.wasm
+      image-ref: ghcr.io/roastedroot/my-module-wasm
+      version: '1.0.0'
 ```
 
 ### GitHub Actions — consumer
