@@ -1,10 +1,13 @@
 package io.roastedroot.inlay.maven;
 
+import dev.sigstore.KeylessVerificationException;
 import dev.sigstore.KeylessVerifier;
 import dev.sigstore.VerificationOptions;
 import dev.sigstore.VerificationOptions.CertificateMatcher;
 import dev.sigstore.bundle.Bundle;
+import dev.sigstore.bundle.BundleParseException;
 import dev.sigstore.strings.StringMatcher;
+import dev.sigstore.trustroot.SigstoreConfigurationException;
 import io.roastedroot.inlay.InlayClient;
 import io.roastedroot.inlay.InlayException;
 import io.roastedroot.inlay.LockFile;
@@ -16,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.GeneralSecurityException;
 import java.util.List;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -209,7 +213,11 @@ public class FetchMojo extends AbstractMojo {
             verifier.verify(artifactPath, bundle, optionsBuilder.build());
 
             getLog().info("Signature verified for " + artifactPath);
-        } catch (Exception e) {
+        } catch (BundleParseException
+                | IOException
+                | KeylessVerificationException
+                | GeneralSecurityException
+                | SigstoreConfigurationException e) {
             throw new MojoExecutionException(
                     "Signature verification failed for " + artifactPath + ": " + e.getMessage(), e);
         }

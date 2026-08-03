@@ -128,7 +128,7 @@ class FetchMojoIT {
                         + "digest ="
                         + " \"sha256:0000000000000000000000000000000000000000000000000000000000000000\"\n");
 
-        FetchMojo mojo = createMojoWithUpdate(module);
+        FetchMojo mojo = createMojo(module, true);
         mojo.execute();
 
         assertTrue(outputFile.exists());
@@ -152,10 +152,6 @@ class FetchMojoIT {
 
     private FetchMojo createMojo(ModuleConfig module) throws Exception {
         return createMojo(module, false);
-    }
-
-    private FetchMojo createMojoWithUpdate(ModuleConfig module) throws Exception {
-        return createMojo(module, true);
     }
 
     private FetchMojo createMojo(ModuleConfig module, boolean updateFlag) throws Exception {

@@ -331,6 +331,13 @@
     </profile>
 
     <profile>
+      <id>no-docker</id>
+      <properties>
+        <skipITs>true</skipITs>
+      </properties>
+    </profile>
+
+    <profile>
       <id>release</id>
       <build>
         <plugins>

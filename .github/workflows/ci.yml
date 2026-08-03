@@ -65,7 +65,7 @@ jobs:
           cache: maven
 
       - name: Build and test
-        run: mvn -B verify
+        run: mvn -B verify ${{ matrix.os == 'macos-latest' && '-Pno-docker' || '' }}
 
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v6
