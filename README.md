@@ -55,6 +55,7 @@ Fetched artifacts are cached in `~/.cache/inlay/` (or `$XDG_CACHE_HOME/inlay/`),
 | (default) | Cache hit → no network |
 | `-Dinlay.update` | Re-resolves digest, updates lock file |
 | `-Dinlay.noCache` | Always pulls from registry |
+| `-Dinlay.skip` | Skips fetch entirely |
 
 ## Lock file
 
@@ -67,6 +68,29 @@ If the registry digest changes but the lock hasn't been updated, the build fails
 ```sh
 mvn io.roastedroot:inlay-maven-plugin:fetch -Dinlay.update
 ```
+
+## Local development
+
+When iterating on a wasm module locally, you can avoid re-fetching from the registry:
+
+**Option A — `outputFile` outside `target/`:** set `outputFile` to a path that `mvn clean` won't delete. Once the lock entry exists and the file is on disk, the plugin skips fetching:
+
+```xml
+<module>
+  <imageRef>ghcr.io/roastedroot/my-module-wasm:1.0.0</imageRef>
+  <outputFile>${project.basedir}/src/main/resources/wasm/my-module.wasm</outputFile>
+</module>
+```
+
+Rebuild your wasm locally and overwrite that file — the plugin will not touch it.
+
+**Option B — skip the fetch entirely:**
+
+```sh
+mvn compile -Dinlay.skip
+```
+
+Useful when you manage the wasm file yourself and don't need the plugin at all during local builds.
 
 ## Authentication
 
