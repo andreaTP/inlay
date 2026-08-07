@@ -54,6 +54,9 @@ public class FetchMojo extends AbstractMojo {
     @Parameter(property = "inlay.configFile")
     private File configFile;
 
+    @Parameter(defaultValue = "false", property = "inlay.skip")
+    private boolean skip;
+
     @Parameter(property = "project", required = true, readonly = true)
     private MavenProject project;
 
@@ -62,6 +65,10 @@ public class FetchMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException {
+        if (skip) {
+            getLog().info("Skipping inlay:fetch (inlay.skip=true)");
+            return;
+        }
         try (WkgParser parser = new WkgParser()) {
             LockFile lock;
             try {
