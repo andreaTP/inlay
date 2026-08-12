@@ -69,6 +69,7 @@ public final class InlayClient {
         try {
             Path tempDir = Files.createTempDirectory("inlay-pull-");
             try {
+                createLayerDirs(containerRef, tempDir);
                 registry.pullArtifact(containerRef, tempDir, true);
 
                 Path pulled = findWasmFile(tempDir);
@@ -161,6 +162,18 @@ public final class InlayClient {
     private Path cachePath(String digest) {
         String safe = digest.replace(":", "/");
         return cacheDir.resolve(safe).resolve("artifact.wasm");
+    }
+
+    private void createLayerDirs(ContainerRef containerRef, Path tempDir) throws IOException {
+        Descriptor descriptor = registry.getDescriptor(containerRef);
+        Manifest manifest = Manifest.fromJson(descriptor.getJson());
+        for (Layer layer : manifest.getLayers()) {
+            String title = layer.getAnnotations().get("org.opencontainers.image.title");
+            if (title != null) {
+                Path layerPath = tempDir.resolve(title);
+                Files.createDirectories(layerPath.getParent());
+            }
+        }
     }
 
     private static Path findWasmFile(Path dir) throws IOException {
