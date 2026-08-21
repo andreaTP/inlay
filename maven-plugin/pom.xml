@@ -39,8 +39,8 @@
     </dependency>
 
     <dependency>
-      <groupId>land.oras</groupId>
-      <artifactId>oras-java-sdk</artifactId>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>oras-java</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

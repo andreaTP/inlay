@@ -14,8 +14,8 @@
 
   <dependencies>
     <dependency>
-      <groupId>land.oras</groupId>
-      <artifactId>oras-java-sdk</artifactId>
+      <groupId>io.roastedroot</groupId>
+      <artifactId>oras-java</artifactId>
     </dependency>
     <dependency>
       <groupId>run.endive</groupId>
