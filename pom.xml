@@ -160,7 +160,7 @@
           <version>${maven-compiler-plugin.version}</version>
           <configuration>
             <parameters>true</parameters>
-            <release>17</release>
+            <release>11</release>
           </configuration>
         </plugin>
       </plugins>
