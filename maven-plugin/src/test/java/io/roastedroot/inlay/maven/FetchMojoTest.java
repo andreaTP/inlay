@@ -1,12 +1,20 @@
 package io.roastedroot.inlay.maven;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.sigstore.bundle.Bundle;
 import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import org.apache.maven.model.Build;
@@ -17,6 +25,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class FetchMojoTest {
+
+    /** Manifest digest of the recorded DSSE fixture, which is also its in-toto subject. */
+    private static final String MANIFEST_DIGEST =
+            "sha256:acd1363f4ee3194fc09ed7e0b196440c1476b8c088deeba942eb0bf000d3f62c";
 
     @TempDir Path tempDir;
 
@@ -62,6 +74,69 @@ class FetchMojoTest {
     void defaultOutputFileDeeplyNested() throws Exception {
         File result = invokeDefaultOutputFile("registry.io/org/sub/module:v1");
         assertEquals("module.wasm", result.getName());
+    }
+
+    @Test
+    void dsseBundleSelectsTheManifestDigest() throws Exception {
+        byte[] selected =
+                FetchMojo.selectArtifactDigest(
+                        loadBundle("cosign-sign-dsse-bundle.json"), MANIFEST_DIGEST);
+
+        assertArrayEquals(
+                FetchMojo.hexToBytes(MANIFEST_DIGEST.substring("sha256:".length())), selected);
+    }
+
+    @Test
+    void messageSignatureBundleDefersToTheArtifactBytes() throws Exception {
+        assertNull(
+                FetchMojo.selectArtifactDigest(
+                        loadBundle("sign-blob-message-signature-bundle.json"), MANIFEST_DIGEST));
+    }
+
+    @Test
+    void dsseBundleRejectsNonSha256ManifestDigest() throws Exception {
+        Bundle bundle = loadBundle("cosign-sign-dsse-bundle.json");
+
+        MojoExecutionException ex =
+                assertThrows(
+                        MojoExecutionException.class,
+                        () -> FetchMojo.selectArtifactDigest(bundle, "sha512:abcdef"));
+        assertTrue(ex.getMessage().contains("Unsupported manifest digest algorithm"));
+    }
+
+    @Test
+    void hexToBytesRoundTrips() throws Exception {
+        assertArrayEquals(new byte[] {0x00, (byte) 0xff, 0x1a}, FetchMojo.hexToBytes("00ff1a"));
+    }
+
+    @Test
+    void hexToBytesRejectsMalformedInput() {
+        assertThrows(MojoExecutionException.class, () -> FetchMojo.hexToBytes("abc"));
+        assertThrows(MojoExecutionException.class, () -> FetchMojo.hexToBytes("zz"));
+    }
+
+    @Test
+    void detectsTheUpstreamMissingSubjectNameFailure() {
+        Exception cause =
+                new IllegalStateException(
+                        "Cannot build Subject, some of required attributes are not set [name]");
+        Exception wrapped = new RuntimeException("Could not parse DSSE payload", cause);
+
+        assertTrue(FetchMojo.isMissingSubjectName(wrapped));
+    }
+
+    @Test
+    void unrelatedFailuresAreNotMistakenForTheUpstreamBug() {
+        assertFalse(
+                FetchMojo.isMissingSubjectName(
+                        new RuntimeException("DSSE signature was not valid")));
+    }
+
+    private static Bundle loadBundle(String fixture) throws Exception {
+        try (InputStream in = FetchMojoTest.class.getResourceAsStream("/" + fixture)) {
+            assertNotNull(in, "missing fixture: " + fixture);
+            return Bundle.from(new InputStreamReader(in, StandardCharsets.UTF_8));
+        }
     }
 
     private File invokeDefaultOutputFile(String imageRef) throws Exception {
