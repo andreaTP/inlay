@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.sigstore.bundle.Bundle;
+import dev.sigstore.strings.StringMatcher;
 import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -102,6 +103,56 @@ class FetchMojoTest {
                         MojoExecutionException.class,
                         () -> FetchMojo.selectArtifactDigest(bundle, "sha512:abcdef"));
         assertTrue(ex.getMessage().contains("Unsupported manifest digest algorithm"));
+    }
+
+    @Test
+    void exactIdentityMatchesOnlyItself() throws Exception {
+        StringMatcher matcher = FetchMojo.matcherFor("Identity", "https://github.com/o/r", null);
+
+        assertTrue(matcher.test("https://github.com/o/r"));
+        assertFalse(matcher.test("https://github.com/o/rr"));
+    }
+
+    @Test
+    void exactIdentityDoesNotTreatStarAsAWildcard() throws Exception {
+        StringMatcher matcher =
+                FetchMojo.matcherFor("Identity", "https://github.com/myorg/*", null);
+
+        assertFalse(matcher.test("https://github.com/myorg/repo"));
+        assertTrue(matcher.test("https://github.com/myorg/*"));
+    }
+
+    @Test
+    void regexIdentityMatchesAPattern() throws Exception {
+        StringMatcher matcher =
+                FetchMojo.matcherFor("Identity", null, "https://github\\.com/myorg/.*");
+
+        assertTrue(matcher.test("https://github.com/myorg/repo"));
+        assertFalse(matcher.test("https://github.com/other/repo"));
+    }
+
+    @Test
+    void noIdentityConfiguredLeavesTheFieldUnconstrained() throws Exception {
+        assertNull(FetchMojo.matcherFor("Identity", null, null));
+    }
+
+    @Test
+    void exactAndRegexTogetherIsRejected() {
+        MojoExecutionException ex =
+                assertThrows(
+                        MojoExecutionException.class,
+                        () -> FetchMojo.matcherFor("Issuer", "a", "b"));
+        assertTrue(ex.getMessage().contains("sigstoreIssuer"));
+        assertTrue(ex.getMessage().contains("sigstoreIssuerRegex"));
+    }
+
+    @Test
+    void invalidRegexIsReportedAgainstItsParameter() {
+        MojoExecutionException ex =
+                assertThrows(
+                        MojoExecutionException.class,
+                        () -> FetchMojo.matcherFor("Identity", null, "[unclosed"));
+        assertTrue(ex.getMessage().contains("sigstoreIdentityRegex"));
     }
 
     @Test

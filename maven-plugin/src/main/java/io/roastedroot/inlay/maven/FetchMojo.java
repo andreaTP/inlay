@@ -6,6 +6,7 @@ import dev.sigstore.VerificationOptions;
 import dev.sigstore.VerificationOptions.CertificateMatcher;
 import dev.sigstore.bundle.Bundle;
 import dev.sigstore.bundle.BundleParseException;
+import dev.sigstore.strings.RegexSyntaxException;
 import dev.sigstore.strings.StringMatcher;
 import dev.sigstore.trustroot.SigstoreConfigurationException;
 import io.roastedroot.inlay.InlayClient;
@@ -159,7 +160,10 @@ public class FetchMojo extends AbstractMojo {
             }
 
             boolean needsVerification =
-                    module.getSigstoreIssuer() != null || module.getSigstoreIdentity() != null;
+                    module.getSigstoreIssuer() != null
+                            || module.getSigstoreIdentity() != null
+                            || module.getSigstoreIssuerRegex() != null
+                            || module.getSigstoreIdentityRegex() != null;
 
             if (needsVerification) {
                 Files.createDirectories(outputPath.getParent());
@@ -246,12 +250,19 @@ public class FetchMojo extends AbstractMojo {
 
             var optionsBuilder = VerificationOptions.builder();
             var matcherBuilder = CertificateMatcher.fulcio();
-            if (module.getSigstoreIdentity() != null) {
-                matcherBuilder.subjectAlternativeName(
-                        StringMatcher.string(module.getSigstoreIdentity()));
+            StringMatcher identity =
+                    matcherFor(
+                            "Identity",
+                            module.getSigstoreIdentity(),
+                            module.getSigstoreIdentityRegex());
+            if (identity != null) {
+                matcherBuilder.subjectAlternativeName(identity);
             }
-            if (module.getSigstoreIssuer() != null) {
-                matcherBuilder.issuer(StringMatcher.string(module.getSigstoreIssuer()));
+            StringMatcher issuer =
+                    matcherFor(
+                            "Issuer", module.getSigstoreIssuer(), module.getSigstoreIssuerRegex());
+            if (issuer != null) {
+                matcherBuilder.issuer(issuer);
             }
             optionsBuilder.addCertificateMatchers(matcherBuilder.build());
 
@@ -275,6 +286,32 @@ public class FetchMojo extends AbstractMojo {
                 | SigstoreConfigurationException e) {
             throw new MojoExecutionException(
                     "Signature verification failed for " + artifactPath + ": " + e.getMessage(), e);
+        }
+    }
+
+    /** The exact form compares with String.equals, so globs need the regex form. */
+    static StringMatcher matcherFor(String field, String exact, String regex)
+            throws MojoExecutionException {
+        if (exact != null && regex != null) {
+            throw new MojoExecutionException(
+                    "Configure either sigstore"
+                            + field
+                            + " or sigstore"
+                            + field
+                            + "Regex, not"
+                            + " both");
+        }
+        if (exact != null) {
+            return StringMatcher.string(exact);
+        }
+        if (regex == null) {
+            return null;
+        }
+        try {
+            return StringMatcher.regex(regex);
+        } catch (RegexSyntaxException e) {
+            throw new MojoExecutionException(
+                    "Invalid sigstore" + field + "Regex: " + regex + ": " + e.getMessage(), e);
         }
     }
 

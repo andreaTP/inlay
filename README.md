@@ -134,7 +134,18 @@ Verification runs inline after fetch — no separate step. Configure on each mod
 </module>
 ```
 
-Both values are matched **exactly**. Globs such as `https://github.com/myorg/*` are not supported and will never match — the `*` is compared as a literal character. To read the correct values off an existing signature, inspect the signing certificate in the bundle: the identity is its subject alternative name, and the issuer is the OIDC issuer extension (`1.3.6.1.4.1.57264.1.1`). An artifact signed locally rather than by CI has the issuer `https://github.com/login/oauth` and the signer's email address as identity.
+`sigstoreIssuer` and `sigstoreIdentity` are matched **exactly** — a glob such as `https://github.com/myorg/*` never matches, because the `*` is compared as a literal character. For patterns, use `sigstoreIssuerRegex` / `sigstoreIdentityRegex` instead:
+
+```xml
+<sigstoreIssuer>https://token.actions.githubusercontent.com</sigstoreIssuer>
+<sigstoreIdentityRegex>https://github\.com/myorg/.*</sigstoreIdentityRegex>
+```
+
+Setting both the exact and the regex form of the same field is an error. Setting neither leaves that field unconstrained.
+
+To read the right values off an existing signature, inspect the signing certificate in the bundle: the identity is its subject alternative name, and the issuer is the OIDC issuer extension (`1.3.6.1.4.1.57264.1.1`). An artifact signed locally rather than by CI has the issuer `https://github.com/login/oauth` and the signer's email address as its identity.
+
+> **A reusable workflow's identity is shared.** For a job run through a reusable workflow, the certificate identity is the *reusable* workflow's ref — for the publisher below, `https://github.com/roastedroot/inlay/.github/workflows/wasm-publish.yml@refs/heads/main` — and it is the same for **every** repository that calls it. Pinning it proves the artifact was signed by something using that workflow, not that it came from the repository you expect. The calling repository appears only in other certificate extensions, which inlay does not currently check. If that distinction matters to you, sign from a workflow of your own instead.
 
 Uses [sigstore-java](https://github.com/sigstore/sigstore-java) keyless verification. The bundle is discovered through OCI referrers on the resolved manifest digest — nothing needs to sit next to the artifact. If several sigstore bundles are attached, each is tried in a stable order and any one that verifies against the configured identity is accepted.
 
